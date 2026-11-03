@@ -1,0 +1,12 @@
+[Unit]
+Description=Sample Transfer UI (analysis lab)
+After=network-online.target pve-cluster.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/sample-transfer/app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

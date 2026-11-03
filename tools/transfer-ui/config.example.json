@@ -1,0 +1,11 @@
+{
+  "bind": "192.168.1.10",
+  "port": 8443,
+  "allowed_networks": ["192.168.1.0/24"],
+  "source_vm": 301,
+  "source_dir": "/home/remnux/Downloads",
+  "targets": [402, 302],
+  "status_vms": [301, 302, 402],
+  "rollback_vms": {"402": "clean"},
+  "max_bytes": 10485760
+}

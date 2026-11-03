@@ -1,0 +1,15 @@
+# Secrets: never commit
+*.conf
+*.key
+*.pem
+*.ovpn
+config-*.xml
+opnsense*.xml
+*.backup
+.env
+# Samples
+samples/
+*.zip
+*.7z
+*.exe
+*.dll
