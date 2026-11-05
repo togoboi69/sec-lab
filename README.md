@@ -56,7 +56,7 @@ Sample transfer 301 → 402: read-only ISO built on the Proxmox host via QEMU gu
 | ID | VM | Role |
 |---|---|---|
 | 100 | OPNsense | Firewall, VPN gateway, DHCP/DNS for vmbr1 |
-| 9000 | REMnux template | Linux malware/email/document analysis toolkit (+ EML Analyzer, CyberChef, Firefox policy) |
+| 9000 | REMnux template | Linux malware/email/document analysis toolkit (+ EML Analyzer pinned to a working version, CyberChef, Firefox policy) |
 | 9011 | FLARE-VM template | Windows 10 with Mandiant FLARE-VM |
 | 301 | REMnux work clone | Daily analysis on vmbr1 |
 | 401 | FLARE work clone | Static analysis / RE on vmbr1 (do not run samples here) |

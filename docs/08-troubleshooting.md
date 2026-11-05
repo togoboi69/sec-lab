@@ -33,6 +33,9 @@ Issues hit during the initial setup and their fixes.
 | BIOS shows "recover BIOS setting" after unplugging | Empty CMOS battery | Replace CR2032, reload your BIOS profile |
 | VM console says "Guest not running" although VM runs | Console opened before the VM was started | Reload the console (F5) |
 | VM without internet after re-enabling tunnel | Gateway still marked down, stale states | Wait for PROTON_GW online, Apply LAN rules, reset state table. |
+| EML Analyzer: attachments listed in the summary, but no attachment details and no Download button | Bug in EML Analyzer `2026.10.25` (`latest` at the time): attachment component crashes (`TypeError: M(...) is not a function`) | Pin `ghcr.io/ninoseki/eml_analyzer:2026.09.12`, never `latest`, see [10](10-remnux-template.md) |
+| EML Analyzer still broken after switching to a working image | Firefox serves the old frontend for `localhost:8000` from cache | Ctrl+Shift+Del → Cache, then Ctrl+Shift+R; test new tags on a second port (new origin) |
+| REMnux shutdown hangs "Job session-1.scope/stop running (… / 1min 30s)" | Desktop process (Firefox, terminal) does not quit | Harmless, wait 90 s (no hard Stop before snapshots); optional `DefaultTimeoutStopSec=15s` |
 
 ## Useful commands
 

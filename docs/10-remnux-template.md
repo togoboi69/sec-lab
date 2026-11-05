@@ -51,8 +51,21 @@ Default login: auto-login, user `remnux`, password `malware` (changed).
 sudo apt install -y docker.io && sudo usermod -aG docker remnux   # only if docker missing
 sudo systemctl enable docker
 docker run -d --name eml-analyzer --restart unless-stopped \
-  -p 127.0.0.1:8000:8000 ghcr.io/ninoseki/eml_analyzer:latest
+  -p 127.0.0.1:8000:8000 ghcr.io/ninoseki/eml_analyzer:2026.09.12
 ```
+
+**Pin a known-good version, do not use `latest`.** Version `2026.10.25` has a frontend bug: the attachment component crashes (`TypeError: M(...) is not a function` in the browser console, plus CSP `eval` warnings), so the attachment details and the **Download** button silently disappear while the rest of the report renders. `2026.09.12` works (tested November 2026). Before moving to a newer tag, test it.
+
+Changing the version:
+
+```bash
+docker rm -f eml-analyzer
+docker run -d --name eml-analyzer --restart unless-stopped -p 127.0.0.1:8000:8000 ghcr.io/ninoseki/eml_analyzer:<tag>
+docker image rm ghcr.io/ninoseki/eml_analyzer:<old-tag>
+docker images ghcr.io/ninoseki/eml_analyzer   # only the new tag, "U" = in use
+```
+
+Then **clear the Firefox cache** (Ctrl+Shift+Del, Everything, Cache) and reload with Ctrl+Shift+R. Otherwise Firefox keeps serving the old frontend for `localhost:8000` and the fix seems not to work. To try a new tag side by side, run it as a second container on another port (e.g. `-p 127.0.0.1:8002:8000`, new origin, no cache) before replacing the main one.
 
 URL: http://localhost:8000. Optional env vars `VIRUSTOTAL_API_KEY`, `URLSCAN_API_KEY` (not set).
 
@@ -155,13 +168,14 @@ Proxmox: VM 9000 → More → Convert to template.
 
 ## Updating the template
 
-A template cannot be started, and it is the base disk of its linked clones, so never modify it in place. Rebuild it while keeping ID 9000:
+A template cannot be started, and it is the base disk of its linked clones, so never modify it in place. A template with linked clones also cannot be deleted. Build the fixed template **next to** the old one with a new ID:
 
-1. Right-click 9000 → Clone → **Full Clone**, ID `302`, name `remnux-new`, storage `nvme`.
-2. Start 302, make the changes, test (reboot).
-3. Cleanup in 302 (history, cache, `machine-id`, see above), `sudo poweroff`.
-4. Remove all linked clones of 9000 (e.g. 301), then remove 9000.
-5. Right-click 302 → Clone → **Full Clone**, ID `9000`, name `remnux`. Convert 9000 to template. Remove 302.
-6. New linked clone 301 `remnux-work`, test, snapshot `clean`.
+1. Right-click the current template → Clone → **Full Clone**, new ID (e.g. `9010`), name `remnux-v2`, storage `nvme`.
+2. Start it, make the changes, test (reboot).
+3. Close Firefox, cleanup (`rm -rf ~/.cache/mozilla` plus history, cache, `machine-id`, see above), `sudo poweroff`.
+4. More → **Convert to template**.
+5. Create new clones from the new template. Keep the old template until all its linked clones (e.g. 301, 302) are rebuilt from the new one, then remove it.
 
-If keeping ID 9000 does not matter, skip steps 4 and 5 and convert 302 directly.
+Do not pick an ID for the build VM that is already used by a clone (e.g. 302 is the INetSim VM in [12](12-offline-detonation.md)).
+
+Optional: `DefaultTimeoutStopSec=15s` in `/etc/systemd/system.conf.d/timeout.conf` (`[Manager]` section), so shutdown does not wait 90 s for `session-1.scope` (a desktop process that does not quit).
