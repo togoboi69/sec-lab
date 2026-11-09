@@ -62,6 +62,14 @@ sudo install -m 755 leak-pull /usr/local/bin/leak-pull   # from this folder
 leak-pull --set-ip <Primary IP>
 ```
 
+### 5. Cloud config with the 700 key (once)
+
+1. Open `cloud-init.yaml` on the laptop in an editor.
+2. In the line `command="/usr/bin/rrsync -ro /data/out",restrict PASTE_LEAK_VM_PUBLIC_KEY` replace only `PASTE_LEAK_VM_PUBLIC_KEY` with the output of `cat ~/.ssh/leak_vps.pub` from 700 (`ssh-ed25519 AAAA... leak-vm`). One line, keep the leading spaces.
+3. Save as `cloud-init-leak.yaml` (or in the password manager). At server creation: section **Cloud config**, paste everything (first line `#cloud-config`).
+
+Copy the key from 700 to the laptop via the noVNC clipboard panel (it is a public key, not secret).
+
 ## Per case
 
 1. **Create server** in project `leak-dl`:
@@ -69,7 +77,7 @@ leak-pull --set-ip <Primary IP>
    - Networking: the kept **Primary IPv4** + IPv6
    - SSH key: laptop key. Firewall: `leak-dl-fw`
    - Volume (if the leak is larger than ~30 GB): size = leak size + 20 %, **ext4, manual mount** (cloud-init mounts it at `/data`)
-   - Cloud config: paste `cloud-init.yaml`, replace `PASTE_LEAK_VM_PUBLIC_KEY` with the line from step 1
+   - Cloud config: paste `cloud-init-leak.yaml` from step 5
 2. Laptop: `ssh root@<IP>` (new host key each server: `ssh-keygen -R <IP>` first), then `cloud-init status --wait`.
 3. Download in tmux (keeps running after logout):
    ```bash
