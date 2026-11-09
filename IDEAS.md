@@ -20,6 +20,11 @@ Optional things that build on the base lab.
 - **Per-session VPN exit country** with Kasm egress gateways (one WireGuard provider per country, `MTU = 1340` because it runs inside the existing tunnel). Only useful for geo-blocked phishing kits; the simpler alternative is switching the OPNsense VPN server temporarily.
 - **Session limits** on the All Users group (`idle_disconnect`, `keepalive_expiration`, `session_time_limit`).
 
+## Leak analysis
+
+- **Download VPS for large leaks**: a disposable cloud server (billed hourly, deleted after the case, incl. its IPv4 and volume) downloads from the leak site via Tor, so your home IP never touches the leak site. The leak VM pulls the result with rsync over SSH (no inbound ports at home). One OPNsense rule lets only the leak VM reach the VPS on port 22 via WAN instead of the VPN, everything else stays in the tunnel.
+- **OCR in leak-hunter** (Tesseract) for scanned PDFs and images; until then Datashare's OCR covers this.
+
 ## Practice network
 
 - **vmbr3** without internet for intentionally vulnerable targets (Metasploitable, VulnHub), Kali with a second NIC there. Do not put vulnerable VMs on vmbr1: they would get internet and sit next to your analysis VMs.

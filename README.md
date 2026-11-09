@@ -2,7 +2,7 @@
 
 A self-hosted analysis lab on one old desktop PC: Proxmox runs isolated VMs for email, document and malware analysis, and every analysis VM reaches the internet **only** through a firewall VM and a commercial VPN tunnel. Samples are executed in a second, fully offline network with a simulated internet.
 
-Built step by step by a SOC analyst for home use: link and phishing analysis, document and email triage, Windows malware analysis, safe detonation with network capture, disposable browsers and a Kali box for CTFs. This repo documents the whole setup so you can build your own version.
+Built step by step by a SOC analyst for home use: link and phishing analysis, document and email triage, Windows malware analysis, safe detonation with network capture, data leak analysis, disposable browsers and a Kali box for CTFs. This repo documents the whole setup so you can build your own version.
 
 > **Disclaimer:** Handling live malware is risky. Use this only on dedicated hardware, keep samples zipped and password-protected, never run samples outside the offline network, check the terms of your VPN provider, and if samples come from your job, make sure your employer allows analysing them at home. No warranty, use at your own risk.
 
@@ -11,7 +11,7 @@ Built step by step by a SOC analyst for home use: link and phishing analysis, do
 | Network | Purpose | VMs |
 |---|---|---|
 | **Home LAN** | Management only | Proxmox web UI, OPNsense GUI |
-| **vmbr1** (analysis) | Internet **only via VPN**, no access to home LAN or firewall, kill switch | REMnux, FLARE-VM, Kasm, Kali |
+| **vmbr1** (analysis) | Internet **only via VPN**, no access to home LAN or firewall, kill switch | REMnux, FLARE-VM, Kasm, Kali, leak analysis |
 | **vmbr2** (detonation) | **No internet at all**, REMnux + INetSim play "the internet", every packet is captured | REMnux (INetSim), FLARE-VM (victim) |
 
 ```
@@ -29,9 +29,9 @@ nic0 ── vmbr0 ── Proxmox host <PVE_IP> (web UI :8006, transfer UI :8443)
                     │
                vmbr1  (no physical port)
                     │
-     ┌──────────────┼───────────────┬───────────────┬──────────────┐
-  REMnux 301    FLARE-VM 401     Kasm 500        Kali 600
-  (email/docs)  (Windows RE)     (10.10.10.20)   (CTFs)
+     ┌──────────────┼───────────────┬───────────────┬──────────────┬──────────────┐
+  REMnux 301    FLARE-VM 401     Kasm 500        Kali 600       Leak 700
+  (email/docs)  (Windows RE)     (10.10.10.20)   (CTFs)         (leak-hunter)
 
 
 vmbr2  (no physical port, no router, no internet)
@@ -64,8 +64,14 @@ Sample transfer 301 → 402: read-only ISO built on the Proxmox host via QEMU gu
 | 402 | FLARE detonation clone | Executes samples on vmbr2 |
 | 500 | Kasm Workspaces | Disposable Chrome/Firefox/Tor sessions in the browser |
 | 600 | Kali | Persistent box for CTFs |
+| 700 | Leak analysis | Ubuntu Desktop, LUKS-encrypted case volume, ICIJ Datashare, leak-hunter |
 
-Plus a small **Sample Transfer UI** on the Proxmox host ([tools/transfer-ui](tools/transfer-ui/)): list files in 301, send one to 402 as ISO, start VMs, roll back 402.
+Plus two small tools:
+
+- **Sample Transfer UI** on the Proxmox host ([tools/transfer-ui](tools/transfer-ui/)): list files in 301, send one to 402 as ISO, start VMs, roll back 402.
+- **leak-hunter** in VM 700 ([tools/leak-hunter](tools/leak-hunter/)): overview of a data leak (file types, sizes, folder tree incl. archive contents), interactive hit reader, ad-hoc search, keyword lists per customer with separate HTML + CSV reports. Python standard library + ripgrep, 7-Zip, pdftotext, readpst, mdbtools.
+
+![leak-hunter](docs/img/leak-hunter/overview.png)
 
 ## Placeholders
 
@@ -97,6 +103,7 @@ The internal subnets `10.10.10.0/24` (analysis) and `10.20.20.0/24` (detonation)
 13. [Sample Transfer UI](docs/13-transfer-ui.md)
 14. [Kasm Workspaces](docs/14-kasm.md)
 15. [Kali VM](docs/15-kali.md)
+16. [Leak analysis VM](docs/16-leak-analysis.md)
 
 Further ideas: [IDEAS.md](IDEAS.md)
 
@@ -107,6 +114,8 @@ Rough time: Proxmox + OPNsense + VPN one evening, each analysis template one eve
 **Suspicious email or link:** download the `.eml` in REMnux 301, open EML Analyzer (local), check links with `curl -sIL`, open them in a disposable Kasm browser, roll back 301.
 
 **Office/PDF/script sample:** static analysis in REMnux 301 (oletools, pdf tools, CyberChef) or FLARE 401. Do not execute.
+
+**Data leak (e.g. ransomware leak site):** copy the archive into VM 700's encrypted case volume, index it in leak-hunter, check the overview and problem list, run one keyword list per customer, work through the hits (filter, flag, view context), export one report per customer. Scanned documents: Datashare with OCR.
 
 **Executable / dynamic behaviour:** start 302, run `detonate-start.sh` (INetSim + PCAP), send the zip to 402 via the transfer UI, execute and watch with Procmon/Process Explorer, stop INetSim, read the INetSim report and the PCAP (Wireshark/NetworkMiner), roll back 402.
 

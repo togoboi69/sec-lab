@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>leak-hunter</title>
+<style>
+:root{
+  --bg:#f5f6f8;--panel:#fff;--text:#1c2230;--muted:#667085;--border:#dde2ea;
+  --accent:#2457d6;--accent-soft:#e8eeff;--bar:#3b6fe0;--mark:#ffe066;--row:#f7f8fa;
+  --flag:#c98a00;--danger:#b42318;--danger-soft:#fdecea;--ok:#1a7f37;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#121519;--panel:#1b1f26;--text:#e5e8ee;--muted:#98a2b3;--border:#2c323d;
+    --accent:#7aa2ff;--accent-soft:#22304f;--bar:#6f96f5;--mark:#7a6200;--row:#20252d;
+    --flag:#ffc83d;--danger:#ff8a7a;--danger-soft:#3a1d1a;--ok:#56d364;}
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:14px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+a{color:var(--accent);text-decoration:none;cursor:pointer}
+a:hover{text-decoration:underline}
+button,select,input,textarea{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 11px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.small{padding:2px 8px;font-size:12px}
+button:disabled{opacity:.5;cursor:default}
+input[type=text],input[type=search],select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 9px}
+textarea{width:100%;font-family:Consolas,ui-monospace,monospace;font-size:12.5px}
+code,.mono{font-family:Consolas,ui-monospace,monospace;font-size:12px}
+header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--border);
+  padding:8px 16px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+header h1{font-size:17px;margin:0}
+nav{display:flex;gap:2px;flex-wrap:wrap}
+nav a{padding:6px 12px;border-radius:6px;color:var(--text)}
+nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+nav a:hover{text-decoration:none;background:var(--row)}
+.spacer{flex:1}
+.status{font-size:12px;color:var(--muted)}
+#job{display:none;padding:8px 16px;background:var(--accent-soft);border-bottom:1px solid var(--border);font-size:13px}
+#job .prog{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+#job .prog div{height:100%;background:var(--accent)}
+#job.err{background:var(--danger-soft);white-space:pre-wrap}
+#msg{display:none;margin:12px 16px 0;padding:8px 12px;border-radius:6px;background:var(--accent-soft)}
+main{padding:16px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px;min-width:0}
+.panel h2{font-size:15px;margin:0 0 10px}
+.panel h3{font-size:14px;margin:0 0 8px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px}
+.tile .v{font-size:22px;font-weight:600}
+.tile .l{font-size:12px;color:var(--muted)}
+.tile.warn .v{color:var(--danger)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:1000px){.grid2{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--border);padding:5px 8px;text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;background:var(--panel);position:sticky;top:0}
+tr:hover td{background:var(--row)}
+td.n,th.n{text-align:right;white-space:nowrap;width:1%}
+td.w{white-space:nowrap;width:1%}
+.barcell{width:34%}
+.bar{height:10px;background:var(--bar);border-radius:0 4px 4px 0;min-width:2px}
+.chip{display:inline-block;background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:1px 8px;font-size:12px;margin:1px 3px 1px 0;white-space:nowrap}
+.chip.warn{background:var(--danger-soft);color:var(--danger)}
+.fname{font-weight:600;word-break:break-all}
+.path{font-family:Consolas,ui-monospace,monospace;font-size:11.5px;color:var(--muted);word-break:break-all}
+mark{background:var(--mark);color:inherit;padding:0 1px;border-radius:2px}
+.snip{font-family:Consolas,ui-monospace,monospace;font-size:12px;word-break:break-word}
+.flag{border:none;background:none;font-size:16px;padding:0 4px;color:var(--muted)}
+.flag.on{color:var(--flag)}
+.empty{padding:36px 16px;text-align:center;color:var(--muted)}
+.pager{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.toolbar input[type=search]{flex:1;min-width:220px}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.seg button{border:none;border-radius:0}
+.seg button.active{background:var(--accent);color:#fff}
+.layout{display:grid;grid-template-columns:300px 1fr;gap:16px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+aside.panel{align-self:start;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow:auto}
+.kw{display:flex;align-items:center;gap:6px;padding:3px 4px;border-radius:5px}
+.kw:hover{background:var(--row)}
+.kw label{flex:1;display:flex;gap:6px;align-items:center;cursor:pointer;min-width:0}
+.kw .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:Consolas,monospace;font-size:12.5px}
+.kw .cnt{font-size:12px;color:var(--muted);white-space:nowrap}
+.kw .only{visibility:hidden}
+.kw:hover .only{visibility:visible}
+.sep{border-top:1px solid var(--border);margin:12px 0}
+.tree ul{list-style:none;margin:0;padding-left:14px}
+.tree>ul{padding-left:0}
+.tree li{margin:1px 0}
+.tree .node{display:flex;gap:4px;align-items:baseline;padding:1px 4px;border-radius:4px;cursor:pointer;white-space:nowrap}
+.tree .node:hover{background:var(--row)}
+.tree .node.sel{background:var(--accent-soft);color:var(--accent)}
+.tree .tg{width:14px;display:inline-block;color:var(--muted);text-align:center}
+.tree .sz{font-size:11px;color:var(--muted);margin-left:auto;padding-left:8px}
+.crumbs{font-size:13px;margin-bottom:10px;word-break:break-all}
+.crumbs a{margin-right:2px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:none;align-items:flex-start;justify-content:center;padding:40px 16px}
+.modal.show{display:flex}
+.modal .box{background:var(--panel);border-radius:8px;max-width:1100px;width:100%;max-height:calc(100vh - 80px);display:flex;flex-direction:column;border:1px solid var(--border)}
+.modal .hd{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center}
+.modal .bd{overflow:auto;padding:0}
+.lines{font-family:Consolas,ui-monospace,monospace;font-size:12px;width:100%}
+.lines td{border:none;padding:1px 8px;white-space:pre-wrap;word-break:break-word}
+.lines td.ln{color:var(--muted);text-align:right;width:1%;user-select:none;white-space:nowrap}
+.lines tr.target td{background:var(--accent-soft)}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:6px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+.toast.show{opacity:.92}
+label.inl{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.formrow{margin:8px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>leak-hunter</h1>
+  <select id="caseSel" title="Case"></select>
+  <nav id="tabs">
+    <a data-tab="overview">Overview</a>
+    <a data-tab="explorer">Explorer</a>
+    <a data-tab="hits">Hits</a>
+    <a data-tab="search">Search</a>
+    <a data-tab="lists">Lists &amp; index</a>
+  </nav>
+  <span class="spacer"></span>
+  <span class="status" id="free"></span>
+</header>
+<div id="job"></div>
+<div id="msg"></div>
+<main id="main"><div class="empty">Loading...</div></main>
+
+<div class="modal" id="viewer"><div class="box">
+  <div class="hd"><div style="flex:1;min-width:0"><div class="fname" id="vTitle"></div><div class="path" id="vSub"></div></div>
+    <button class="small" id="vUp">&uarr; earlier</button><button class="small" id="vDown">later &darr;</button>
+    <button class="small" id="vCopy">Copy path</button><button class="small" id="vClose">Close</button></div>
+  <div class="bd" id="vBody"></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script nonce="__NONCE__">
+(function(){
+'use strict';
+var CSRF = '__CSRF__';
+var $ = function(id){ return document.getElementById(id); };
+var S = { cases: [], case: '', tab: 'overview', wasRunning: false,
+  ex: { key: '', offset: 0, sort: 'name', open: {} },
+  hits: { run: null, runs: [], kw: [], sel: null, q: '', view: 'hits', page: 0, flagged: false },
+  search: { q: '', mode: 'text', words: false, scope: 'content', res: null },
+  editList: null };
+
+/* ---------- helpers ---------- */
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function reEsc(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function num(n){ return (n == null ? 0 : n).toLocaleString(); }
+function size(n){ n = +n || 0; var u = ['B','KB','MB','GB','TB'], i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i ? n.toFixed(1) : n.toFixed(0)) + ' ' + u[i]; }
+function base(p){ var s = String(p || ''); var i = s.lastIndexOf('/'); return i >= 0 ? s.slice(i + 1) : s; }
+function toast(m){ var t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('show'); }, 1800); }
+function qs(o){ return Object.keys(o).filter(function(k){ return o[k] !== undefined && o[k] !== null; }).map(function(k){ return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]); }).join('&'); }
+function api(path, params){
+  params = params || {}; params.case = S.case;
+  return fetch(path + '?' + qs(params)).then(function(r){ return r.json(); });
+}
+function post(path, data){
+  data.csrf = CSRF; data.case = S.case;
+  return fetch(path, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: qs(data) }).then(function(r){ return r.json(); });
+}
+function copy(txt){
+  function fb(){ var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Path copied'); } catch (e) { toast('Copy failed'); } ta.remove(); }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ toast('Path copied'); }, fb); else fb();
+}
+function termRe(terms){
+  var parts = [];
+  (terms || []).forEach(function(t){
+    if (!t) return;
+    if (/^re:/i.test(t)) { try { new RegExp(t.slice(3), 'i'); parts.push(t.slice(3)); } catch (e) {} }
+    else parts.push(reEsc(t));
+  });
+  if (!parts.length) return null;
+  try { return new RegExp('(' + parts.join('|') + ')', 'gi'); } catch (e) { return null; }
+}
+function hl(text, re){
+  var t = String(text == null ? '' : text);
+  if (!re) return esc(t);
+  var out = '', pos = 0, m; re.lastIndex = 0;
+  while ((m = re.exec(t)) !== null) {
+    if (m[0] === '') { re.lastIndex++; continue; }
+    out += esc(t.slice(pos, m.index)) + '<mark>' + esc(m[0]) + '</mark>'; pos = m.index + m[0].length;
+  }
+  return out + esc(t.slice(pos));
+}
+function bar(v, max){ var w = max ? Math.max(0.5, 100 * v / max) : 0; return '<div class="bar" style="width:' + w.toFixed(1) + '%"></div>'; }
+var KIND = { text: 'text', ooxml: 'Office (docx/xlsx/pptx)', ole: 'Office old / Outlook msg', odf: 'OpenDocument', pdf: 'PDF',
+  eml: 'mail', mbox: 'mailbox', pst: 'Outlook PST', sqlite: 'SQLite DB', mdb: 'Access DB', archive: 'archive',
+  media: 'media / executable', binary: 'other binary', empty: 'empty', unreadable: 'unreadable' };
+function kindChip(k){ return '<span class="chip" title="' + esc(k || '?') + '">' + esc(KIND[k] || k || '?') + '</span>'; }
+function empty(m){ return '<div class="empty">' + m + '</div>'; }
+
+/* ---------- routing ---------- */
+function setUrl(){ history.replaceState(null, '', '/?' + qs({ case: S.case, tab: S.tab })); }
+function go(tab){ S.tab = tab; setUrl(); renderTabs(); render(); }
+function renderTabs(){
+  Array.prototype.forEach.call(document.querySelectorAll('#tabs a'), function(a){ a.classList.toggle('active', a.getAttribute('data-tab') === S.tab); });
+}
+$('tabs').addEventListener('click', function(e){ var t = e.target.getAttribute('data-tab'); if (t) go(t); });
+$('caseSel').addEventListener('change', function(e){
+  S.case = e.target.value; S.ex = { key: '', offset: 0, sort: 'name', open: {} };
+  S.hits = { run: null, runs: [], kw: [], sel: null, q: '', view: 'hits', page: 0, flagged: false }; S.search.res = null;
+  setUrl(); render();
+});
+
+function render(){
+  var m = $('main');
+  if (!S.case) { m.innerHTML = empty('No case yet. Create a folder in <code>' + esc(S.docs || '/cases/datashare/docs') + '</code>, copy the leak into it and reload.'); return; }
+  ({ overview: rOverview, explorer: rExplorer, hits: rHits, search: rSearch, lists: rLists })[S.tab]();
+}
+
+/* ---------- status / job ---------- */
+function poll(){
+  fetch('/api/status').then(function(r){ return r.json(); }).then(function(st){
+    S.docs = st.docs;
+    $('free').textContent = 'Free on /cases: ' + size(st.free);
+    var names = st.cases.map(function(c){ return c.name; });
+    if (JSON.stringify(names) !== JSON.stringify(S.cases.map(function(c){ return c.name; }))) {
+      S.cases = st.cases;
+      if (!S.case || names.indexOf(S.case) < 0) S.case = names[0] || '';
+      $('caseSel').innerHTML = st.cases.map(function(c){ return '<option' + (c.name === S.case ? ' selected' : '') + ' value="' + esc(c.name) + '">' + esc(c.name) + (c.indexed ? '' : ' (not indexed)') + '</option>'; }).join('');
+      if (!S.started) { S.started = true; render(); }
+    }
+    var j = st.job, box = $('job');
+    if (j && j.running) {
+      var pct = j.total ? Math.round(100 * j.done / j.total) : 0;
+      box.className = ''; box.style.display = 'block';
+      box.innerHTML = '<b>' + esc(j.kind) + '</b> on <b>' + esc(j.case) + '</b>: ' + esc(j.phase || '') +
+        (j.total ? ' &middot; ' + num(j.done) + ' / ' + num(j.total) : '') + ' &middot; ' + (j.elapsed || 0) + ' s' +
+        '<div class="prog"><div style="width:' + pct + '%"></div></div>';
+      S.wasRunning = true;
+    } else {
+      if (j && j.error) { box.className = 'err'; box.style.display = 'block'; box.textContent = 'Last job (' + j.kind + ' on ' + j.case + ') failed:\n' + j.error; }
+      else box.style.display = 'none';
+      if (S.wasRunning) { S.wasRunning = false; S.hits.run = null; toast('Job finished'); render(); }
+    }
+  }).catch(function(){});
+}
+
+/* ---------- overview ---------- */
+function rOverview(){
+  var m = $('main'); m.innerHTML = empty('Loading overview...');
+  api('/api/overview').then(function(d){
+    if (!d.indexed) { m.innerHTML = empty('Case <b>' + esc(S.case) + '</b> is not indexed yet. Go to <a data-go="lists">Lists &amp; index</a> and start indexing.'); return; }
+    var t = d.totals;
+    var tiles = [
+      ['Files', num(t.files), 'without archives'], ['Total size', size(t.size), 'unpacked'],
+      ['Folders', num(t.folders), ''], ['Archives', num(t.archives), size(t.archive_size) + ' packed, max depth ' + t.max_depth],
+      ['Searchable', num(t.searchable), 'text extracted'], ['Mails', num(t.mails), 'eml incl. PST'],
+      ['Problems', num(t.problems), 'encrypted, damaged, skipped', t.problems > 0],
+      ['Ext. mismatch', num(t.mismatches), 'extension vs. content', t.mismatches > 0]];
+    var h = '<div class="status" style="margin-bottom:10px">Indexed ' + esc(d.meta.indexed) + ' in ' + esc(d.meta.duration_s) + ' s</div>';
+    h += '<div class="tiles">' + tiles.map(function(x){ return '<div class="tile' + (x[3] ? ' warn' : '') + '"><div class="v">' + x[1] + '</div><div class="l">' + x[0] + (x[2] ? ' &middot; ' + x[2] : '') + '</div></div>'; }).join('') + '</div>';
+    var kinds = d.kinds.filter(function(k){ return k.kind !== 'archive'; });
+    var kmax = Math.max.apply(null, kinds.map(function(k){ return k.size; }).concat([1]));
+    h += '<div class="grid2"><div class="panel"><h2>Size by file type</h2><table><tr><th>Type</th><th class="n">Files</th><th class="n">Size</th><th class="barcell"></th></tr>' +
+      kinds.map(function(k){ return '<tr title="' + esc(k.kind) + ': ' + num(k.files) + ' files, ' + size(k.size) + '"><td>' + kindChip(k.kind) + '</td><td class="n">' + num(k.files) + '</td><td class="n">' + size(k.size) + '</td><td class="barcell">' + bar(k.size, kmax) + '</td></tr>'; }).join('') +
+      '</table><div class="status" style="margin-top:6px">Archives are shown as folders; their unpacked contents are counted here.</div></div>';
+    var emax = Math.max.apply(null, d.exts.map(function(x){ return x.size; }).concat([1]));
+    h += '<div class="panel"><h2>Extensions (by size)</h2><div style="max-height:420px;overflow:auto"><table><tr><th>Extension</th><th class="n">Files</th><th class="n">Size</th><th class="barcell"></th></tr>' +
+      d.exts.map(function(x){ return '<tr title=".' + esc(x.ext) + ': ' + num(x.files) + ' files, ' + size(x.size) + '"><td class="mono">' + esc(x.ext) + '</td><td class="n">' + num(x.files) + '</td><td class="n">' + size(x.size) + '</td><td class="barcell">' + bar(x.size, emax) + '</td></tr>'; }).join('') +
+      '</table></div></div></div>';
+    var tmax = Math.max.apply(null, d.top.map(function(x){ return x.size; }).concat([1]));
+    h += '<div class="grid2"><div class="panel"><h2>Top level</h2><table><tr><th>Folder / archive</th><th class="n">Files</th><th class="n">Size</th><th class="barcell"></th></tr>' +
+      d.top.map(function(x){ return '<tr><td><a data-dir="' + esc(x.key) + '">' + (x.archive ? '&#128230; ' : '&#128193; ') + esc(x.name.replace(/!$/, '')) + '</a></td><td class="n">' + num(x.nfiles) + '</td><td class="n">' + size(x.size) + '</td><td class="barcell">' + bar(x.size, tmax) + '</td></tr>'; }).join('') +
+      '</table></div></div>';
+    h += '<div class="panel"><h2>Largest files</h2><div style="max-height:420px;overflow:auto"><table><tr><th>File</th><th>Type</th><th class="n">Size</th></tr>' +
+      d.largest.map(function(x){ return '<tr><td><a data-dir="' + esc(x.dir) + '" class="fname">' + esc(base(x.path)) + '</a><div class="path">' + esc(x.path) + '</div></td><td>' + kindChip(x.kind) + '</td><td class="n">' + size(x.size) + '</td></tr>'; }).join('') +
+      '</table></div></div>';
+    if (d.problems.length) h += '<div class="panel"><h2>Problems (' + num(t.problems) + ')</h2><div style="max-height:360px;overflow:auto"><table><tr><th>File</th><th>Status</th><th>Note</th></tr>' +
+      d.problems.map(function(x){ return '<tr><td><a data-dir="' + esc(x.dir) + '" class="mono">' + esc(x.path) + '</a></td><td><span class="chip warn">' + esc(x.status) + '</span></td><td>' + esc(x.note) + '</td></tr>'; }).join('') + '</table></div></div>';
+    if (d.mismatches.length) h += '<div class="panel"><h2>Extension does not match content (' + num(t.mismatches) + ')</h2><div style="max-height:300px;overflow:auto"><table><tr><th>File</th><th>Extension</th><th>Detected</th></tr>' +
+      d.mismatches.map(function(x){ return '<tr><td><a data-dir="' + esc(x.dir) + '" class="mono">' + esc(x.path) + '</a></td><td class="mono">' + esc(x.ext) + '</td><td>' + kindChip(x.kind) + '</td></tr>'; }).join('') + '</table></div></div>';
+    h += '<div class="status">Static report: <a href="/file?' + qs({case: S.case, name: 'overview.html'}) + '" target="_blank">overview.html</a> &middot; <a href="/file?' + qs({case: S.case, name: 'inventory.csv'}) + '">inventory.csv</a> (all files)</div>';
+    m.innerHTML = h;
+  });
+}
+$('main').addEventListener('click', function(e){
+  var a = e.target.closest('[data-dir]');
+  if (a && !a.hasAttribute('data-node')) { e.preventDefault(); openDir(a.getAttribute('data-dir')); return; }
+  var g = e.target.closest('[data-go]'); if (g) { go(g.getAttribute('data-go')); }
+});
+function openDir(key){
+  S.ex.key = key; S.ex.offset = 0;
+  var k = ''; key.replace(/\//g, function(_, i){ k = key.slice(0, i + 1); S.ex.open[k] = true; return '/'; });
+  S.ex.open[''] = true;
+  go('explorer');
+}
+
+/* ---------- explorer ---------- */
+function rExplorer(){
+  var m = $('main');
+  m.innerHTML = '<div class="layout"><aside class="panel tree" id="tree"><div class="status">Loading tree...</div></aside><section class="panel" id="folder">' + empty('Loading...') + '</section></div>';
+  renderTree(); loadFolder();
+}
+var treeCache = {};
+function treeChildren(key){
+  if (treeCache[S.case + '|' + key]) return Promise.resolve(treeCache[S.case + '|' + key]);
+  return api('/api/tree', { key: key, dirs_only: '1' }).then(function(d){ treeCache[S.case + '|' + key] = d; return d; });
+}
+function renderTree(){
+  var el = $('tree'); if (!el) return;
+  function build(key){
+    return treeChildren(key).then(function(d){
+      if (d.error) return '<div class="status">' + esc(d.error) + '</div>';
+      return Promise.all(d.dirs.map(function(c){
+        var open = S.ex.open[c.key];
+        var row = '<li><div class="node' + (S.ex.key === c.key ? ' sel' : '') + '" data-node="1" data-dir="' + esc(c.key) + '">' +
+          '<span class="tg" data-toggle="' + esc(c.key) + '">' + (c.ndirs ? (open ? '&#9662;' : '&#9656;') : '') + '</span>' +
+          '<span>' + (c.archive ? '&#128230;' : '&#128193;') + ' ' + esc(c.name.replace(/!$/, '')) + '</span><span class="sz">' + size(c.size) + '</span></div>';
+        if (open && c.ndirs) return build(c.key).then(function(inner){ return row + inner + '</li>'; });
+        return row + '</li>';
+      })).then(function(items){ return '<ul>' + items.join('') + '</ul>'; });
+    });
+  }
+  build('').then(function(inner){
+    $('tree') && ($('tree').innerHTML = '<div class="node' + (S.ex.key === '' ? ' sel' : '') + '" data-node="1" data-dir=""><span class="tg"></span><b>' + esc(S.case) + '</b></div>' + inner);
+  });
+}
+document.addEventListener('click', function(e){
+  var tg = e.target.closest('[data-toggle]');
+  if (tg && $('tree') && $('tree').contains(tg)) { var k = tg.getAttribute('data-toggle'); S.ex.open[k] = !S.ex.open[k]; renderTree(); e.stopPropagation(); return; }
+  var n = e.target.closest('[data-node]');
+  if (n && $('tree') && $('tree').contains(n)) { S.ex.key = n.getAttribute('data-dir'); S.ex.offset = 0; S.ex.open[S.ex.key] = true; renderTree(); loadFolder(); }
+}, true);
+function crumbs(key){
+  var parts = [['', S.case]], last = 0;
+  key.replace(/\//g, function(_, i){ var seg = key.slice(last, i); parts.push([key.slice(0, i + 1), seg]); last = i + 1; return '/'; });
+  return '<div class="crumbs">' + parts.map(function(p, i){
+    var name = p[1].replace(/!$/, '');
+    return (i ? (p[1].slice(-1) === '!' ? ' &#128230; ' : ' / ') : '&#128193; ') + (i === parts.length - 1 ? '<b>' + esc(name) + '</b>' : '<a data-dir="' + esc(p[0]) + '" data-crumb="1">' + esc(name) + '</a>');
+  }).join('') + '</div>';
+}
+function loadFolder(){
+  var el = $('folder'); if (!el) return;
+  api('/api/tree', { key: S.ex.key, offset: S.ex.offset, sort: S.ex.sort }).then(function(d){
+    if (d.error) { el.innerHTML = empty(esc(d.error)); return; }
+    var n = d.node, h = crumbs(S.ex.key);
+    h += '<div class="status" style="margin-bottom:10px">' + num(n.nfiles) + ' files, ' + size(n.size) + ' in total (incl. subfolders)</div>';
+    if (d.dirs.length) {
+      var mx = Math.max.apply(null, d.dirs.map(function(x){ return x.size; }).concat([1]));
+      h += '<h3>Folders and archives (' + num(d.dirs.length) + ')</h3><div style="max-height:340px;overflow:auto;margin-bottom:14px"><table><tr><th>Name</th><th class="n">Files</th><th class="n">Size</th><th class="barcell"></th></tr>' +
+        d.dirs.map(function(x){ return '<tr><td><a data-dir="' + esc(x.key) + '">' + (x.archive ? '&#128230; ' : '&#128193; ') + esc(x.name.replace(/!$/, '')) + '</a></td><td class="n">' + num(x.nfiles) + '</td><td class="n">' + size(x.size) + '</td><td class="barcell">' + bar(x.size, mx) + '</td></tr>'; }).join('') + '</table></div>';
+    }
+    h += '<div class="toolbar"><h3 style="margin:0">Files here (' + num(d.nfiles_here) + ')</h3><span class="spacer"></span>Sort <select id="exSort"><option value="name">name</option><option value="size">size</option><option value="kind">type</option></select></div>';
+    if (!d.files.length) h += empty('No files directly in this folder.');
+    else h += '<table><tr><th>Name</th><th>Type</th><th class="n">Size</th><th>Status</th><th></th></tr>' + d.files.map(function(f){
+      return '<tr><td>' + (f.child ? '<a class="fname" data-dir="' + esc(f.child) + '">' + esc(f.name) + '</a>' : '<span class="fname">' + esc(f.name) + '</span>') +
+        (f.sha256 ? '<div class="path">SHA256 ' + esc(f.sha256) + '</div>' : '') + '</td>' +
+        '<td class="w">' + kindChip(f.kind) + (f.mismatch ? ' <span class="chip warn" title="extension does not match content">.' + esc(f.ext) + '?</span>' : '') + '</td>' +
+        '<td class="n">' + size(f.size) + '</td><td>' + (f.status === 'ok' ? '' : '<span class="chip warn">' + esc(f.status) + '</span> ') + esc(f.note || '') + '</td>' +
+        '<td class="w">' + (f.child ? '<button class="small" data-dir="' + esc(f.child) + '">Open</button> ' : '') +
+        (f.searchable ? '<button class="small" data-view="' + f.id + '">View text</button> ' : '') +
+        '<button class="small" data-copy="' + esc(f.real) + '">Copy path</button></td></tr>';
+    }).join('') + '</table>';
+    var pages = Math.ceil(d.nfiles_here / 200);
+    if (pages > 1) h += '<div class="pager"><button class="small" id="exPrev"' + (S.ex.offset ? '' : ' disabled') + '>&larr; Prev</button><span class="status">' + (S.ex.offset / 200 + 1) + ' / ' + pages + '</span><button class="small" id="exNext"' + (S.ex.offset + 200 >= d.nfiles_here ? ' disabled' : '') + '>Next &rarr;</button></div>';
+    el.innerHTML = h;
+    $('exSort').value = S.ex.sort;
+    $('exSort').onchange = function(e){ S.ex.sort = e.target.value; S.ex.offset = 0; loadFolder(); };
+    if ($('exPrev')) { $('exPrev').onclick = function(){ S.ex.offset -= 200; loadFolder(); }; $('exNext').onclick = function(){ S.ex.offset += 200; loadFolder(); }; }
+  });
+}
+
+/* ---------- viewer ---------- */
+var V = { id: 0, line: 0, re: null, real: '' };
+function view(id, line, re){
+  V.id = id; V.line = line || 0; V.center = V.line; V.re = re || null;
+  loadView(); $('viewer').classList.add('show');
+}
+function loadView(){
+  api('/api/view', { id: V.id, line: V.center || 0, ctx: 40 }).then(function(d){
+    if (d.error) { $('vBody').innerHTML = empty(esc(d.error)); return; }
+    V.real = d.real; V.start = d.start;
+    $('vTitle').textContent = base(d.path);
+    $('vSub').textContent = d.path + (d.converted ? '  (extracted text, line numbers of the extracted text)' : '');
+    $('vBody').innerHTML = d.lines.length ? '<table class="lines">' + d.lines.map(function(l){
+      return '<tr' + (l[0] === V.line ? ' class="target" id="vTarget"' : '') + '><td class="ln">' + l[0] + '</td><td>' + hl(l[1], V.re) + '</td></tr>';
+    }).join('') + '</table>' : empty('No more lines.');
+    var t = $('vTarget'); if (t) t.scrollIntoView({ block: 'center' });
+  });
+}
+$('vClose').onclick = function(){ $('viewer').classList.remove('show'); };
+$('viewer').addEventListener('click', function(e){ if (e.target === $('viewer')) $('viewer').classList.remove('show'); });
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') $('viewer').classList.remove('show'); });
+$('vUp').onclick = function(){ V.center = Math.max(1, (V.start || 1) - 40); loadView(); };
+$('vDown').onclick = function(){ V.center = (V.center || 1) + 80; loadView(); };
+$('vCopy').onclick = function(){ copy(V.real); };
+document.addEventListener('click', function(e){
+  var b = e.target.closest('[data-view]');
+  if (b) { view(+b.getAttribute('data-view'), +(b.getAttribute('data-line') || 0), termRe(JSON.parse(b.getAttribute('data-terms') || '[]'))); return; }
+  var c = e.target.closest('[data-copy]'); if (c) copy(c.getAttribute('data-copy'));
+});
+
+/* ---------- hits ---------- */
+function rHits(){
+  var m = $('main'); m.innerHTML = empty('Loading...');
+  api('/api/runs').then(function(runs){
+    S.hits.runs = runs.filter(function(r){ return r.done; });
+    if (!S.hits.runs.length) { m.innerHTML = empty('No hunt results yet. Create a keyword list in <a data-go="lists">Lists &amp; index</a> and press <b>Run hunt</b>.'); return; }
+    if (!S.hits.run || !S.hits.runs.some(function(r){ return r.id === S.hits.run; })) { S.hits.run = S.hits.runs[0].id; S.hits.sel = null; S.hits.page = 0; }
+    return api('/api/kw', { run: S.hits.run }).then(function(kw){
+      S.hits.kw = kw;
+      m.innerHTML = '<div class="layout"><aside class="panel">' +
+        '<h3>Hunt</h3><select id="hRun" style="width:100%">' + S.hits.runs.map(function(r){ return '<option value="' + r.id + '"' + (r.id === S.hits.run ? ' selected' : '') + '>' + esc(r.list) + ' &middot; ' + esc(r.stamp) + ' (' + num(r.hits) + ')</option>'; }).join('') + '</select>' +
+        '<div class="sep"></div><h3>Keywords</h3><div style="display:flex;gap:6px;margin-bottom:6px"><button class="small" id="kwAll">All</button><button class="small" id="kwNone">None</button></div><div id="kwList"></div>' +
+        '<div class="sep"></div><h3>Filters</h3><label class="inl"><input type="checkbox" id="hFlag"' + (S.hits.flagged ? ' checked' : '') + '> Flagged files only (&#9733;)</label>' +
+        '<div style="margin-top:8px"><button class="small" id="hClear">Clear all flags</button></div></aside>' +
+        '<section class="panel"><div class="toolbar"><input type="search" id="hQ" placeholder="Filter file paths and context..." value="' + esc(S.hits.q) + '">' +
+        '<div class="seg"><button id="vHits"' + (S.hits.view === 'hits' ? ' class="active"' : '') + '>Hits</button><button id="vFiles"' + (S.hits.view === 'files' ? ' class="active"' : '') + '>Files</button></div></div>' +
+        '<div class="toolbar" style="background:var(--row);padding:8px;border-radius:6px"><span class="status">Export current filter:</span><button class="small" data-exp="csv">CSV</button><button class="small" data-exp="html">HTML report</button><button class="small primary" data-exp="zip">One HTML per keyword (zip)</button></div>' +
+        '<div class="status" id="hSum" style="margin-bottom:8px"></div><div id="hContent"></div><div class="pager" id="hPager"></div></section></div>';
+      renderKw(); loadHits();
+      $('hRun').onchange = function(e){ S.hits.run = +e.target.value; S.hits.sel = null; S.hits.page = 0; rHits(); };
+      $('kwAll').onclick = function(){ S.hits.sel = null; S.hits.page = 0; renderKw(); loadHits(); };
+      $('kwNone').onclick = function(){ S.hits.sel = []; S.hits.page = 0; renderKw(); loadHits(); };
+      $('hFlag').onchange = function(e){ S.hits.flagged = e.target.checked; S.hits.page = 0; loadHits(); };
+      $('hClear').onclick = function(){ if (confirm('Remove all flags in this case?')) post('/api/clearflags', {}).then(loadHits); };
+      var t; $('hQ').oninput = function(e){ clearTimeout(t); t = setTimeout(function(){ S.hits.q = e.target.value.trim(); S.hits.page = 0; loadHits(); }, 250); };
+      $('vHits').onclick = function(){ S.hits.view = 'hits'; S.hits.page = 0; rHits(); };
+      $('vFiles').onclick = function(){ S.hits.view = 'files'; S.hits.page = 0; rHits(); };
+    });
+  });
+}
+function selected(){ return S.hits.sel === null ? S.hits.kw.map(function(k){ return k.kw; }) : S.hits.sel; }
+function renderKw(){
+  var sel = selected();
+  $('kwList').innerHTML = S.hits.kw.map(function(k){
+    return '<div class="kw"><label><input type="checkbox" data-kw="' + esc(k.kw) + '"' + (sel.indexOf(k.kw) >= 0 ? ' checked' : '') + '><span class="name" title="' + esc(k.kw) + '">' + esc(k.kw) + '</span></label>' +
+      '<span class="cnt" title="hits / files">' + num(k.hits) + ' / ' + num(k.files) + 'f</span><button class="small only" data-only="' + esc(k.kw) + '">only</button></div>';
+  }).join('') || '<div class="status">No keywords.</div>';
+  $('kwList').onchange = function(e){
+    var k = e.target.getAttribute('data-kw'); if (k == null) return;
+    var s = selected().slice(); var i = s.indexOf(k);
+    if (e.target.checked && i < 0) s.push(k); if (!e.target.checked && i >= 0) s.splice(i, 1);
+    S.hits.sel = s.length === S.hits.kw.length ? null : s; S.hits.page = 0; loadHits();
+  };
+  $('kwList').onclick = function(e){ var k = e.target.getAttribute('data-only'); if (k == null) return; S.hits.sel = [k]; S.hits.page = 0; renderKw(); loadHits(); };
+}
+function hitParams(){
+  return { run: S.hits.run, kws: S.hits.sel === null ? undefined : JSON.stringify(S.hits.sel), q: S.hits.q || undefined,
+    flagged: S.hits.flagged ? '1' : undefined, view: S.hits.view, page: S.hits.page };
+}
+function loadHits(){
+  var terms = selected().slice(); if (S.hits.q) terms.push(S.hits.q);
+  var re = termRe(terms), tj = esc(JSON.stringify(terms));
+  api('/api/hits', hitParams()).then(function(d){
+    if (d.error) { $('hContent').innerHTML = empty(esc(d.error)); return; }
+    $('hSum').textContent = num(d.hits) + ' hits in ' + num(d.files) + ' files match the current filter.';
+    var h;
+    if (!d.rows.length) h = empty('No hits for the current filter.');
+    else if (S.hits.view === 'hits') {
+      h = '<table><tr><th>Keyword</th><th>File</th><th class="n">Line</th><th>Context</th><th></th></tr>' + d.rows.map(function(r){
+        return '<tr><td class="w"><span class="chip">' + esc(r.kw) + '</span></td><td><span class="fname">' + esc(base(r.path)) + '</span><div class="path">' + esc(r.path) + '</div></td>' +
+          '<td class="n">' + (r.line || 'name') + '</td><td class="snip">' + hl(r.snippet, re) + '</td>' +
+          '<td class="w"><button class="flag' + (r.flagged ? ' on' : '') + '" data-flag="' + r.fid + '" title="Flag file">&#9733;</button>' +
+          (r.line ? '<button class="small" data-view="' + r.fid + '" data-line="' + r.line + '" data-terms="' + tj + '">View</button> ' : '') +
+          '<button class="small" data-copy="' + esc(r.real) + '">Copy path</button></td></tr>';
+      }).join('') + '</table>';
+    } else {
+      h = '<table><tr><th>File</th><th>Keywords</th><th class="n">Hits</th><th></th></tr>' + d.rows.map(function(r){
+        var sub = r.sub.map(function(x){ return '<div style="margin:4px 0"><span class="chip">' + esc(x.kw) + '</span> ' +
+          (x.line ? '<a data-view="' + r.fid + '" data-line="' + x.line + '" data-terms="' + tj + '">line ' + x.line + '</a> &middot; ' : 'name &middot; ') + '<span class="snip">' + hl(x.snippet, re) + '</span></div>'; }).join('') +
+          (r.n > r.sub.length ? '<div class="status">+' + num(r.n - r.sub.length) + ' more (Hits view or export)</div>' : '');
+        return '<tr><td><span class="fname">' + esc(base(r.path)) + '</span><div class="path">' + esc(r.path) + '</div><details><summary class="status" style="cursor:pointer">Show hits</summary>' + sub + '</details></td>' +
+          '<td>' + String(r.kws || '').split(',').map(function(k){ return '<span class="chip">' + esc(k) + '</span>'; }).join('') + '</td><td class="n">' + num(r.n) + '</td>' +
+          '<td class="w"><button class="flag' + (r.flagged ? ' on' : '') + '" data-flag="' + r.fid + '">&#9733;</button><button class="small" data-copy="' + esc(r.real) + '">Copy path</button></td></tr>';
+      }).join('') + '</table>';
+    }
+    $('hContent').innerHTML = h;
+    var total = S.hits.view === 'hits' ? d.hits : d.files, pages = Math.max(1, Math.ceil(total / 100));
+    $('hPager').innerHTML = pages > 1 ? '<button class="small" id="pPrev"' + (S.hits.page ? '' : ' disabled') + '>&larr; Prev</button><span class="status">Page ' + (S.hits.page + 1) + ' / ' + pages + '</span><button class="small" id="pNext"' + (S.hits.page >= pages - 1 ? ' disabled' : '') + '>Next &rarr;</button>' : '';
+    if ($('pPrev')) { $('pPrev').onclick = function(){ S.hits.page--; loadHits(); scrollTo(0, 0); }; $('pNext').onclick = function(){ S.hits.page++; loadHits(); scrollTo(0, 0); }; }
+  });
+}
+document.addEventListener('click', function(e){
+  var f = e.target.closest('[data-flag]');
+  if (f) { post('/api/flag', { fid: f.getAttribute('data-flag') }).then(function(r){ toast(r.flagged ? 'File flagged' : 'Flag removed'); loadHits(); }); return; }
+  var x = e.target.closest('[data-exp]');
+  if (x) { var p = hitParams(); delete p.view; delete p.page; p.fmt = x.getAttribute('data-exp'); p.case = S.case; location.href = '/api/export?' + qs(p); }
+});
+
+/* ---------- search ---------- */
+function rSearch(){
+  var s = S.search;
+  $('main').innerHTML = '<div class="panel"><h2>Search the whole leak</h2>' +
+    '<form id="sForm" class="toolbar"><input type="search" id="sQ" placeholder="e.g. a name, domain, IBAN, password..." value="' + esc(s.q) + '" autofocus>' +
+    '<select id="sScope"><option value="content">in contents</option><option value="names">in file names / paths</option></select>' +
+    '<select id="sMode"><option value="text">text</option><option value="regex">regex</option></select>' +
+    '<label class="inl"><input type="checkbox" id="sWords"' + (s.words ? ' checked' : '') + '> whole words</label>' +
+    '<button class="primary">Search</button></form>' +
+    '<div class="status">Ad-hoc search over all searchable files (max. 500 results, 20 per file, 2 min). Ignores case. For reports use keyword lists.</div></div>' +
+    '<div class="panel" id="sRes">' + empty('Enter a search term.') + '</div>';
+  $('sScope').value = s.scope; $('sMode').value = s.mode;
+  if (s.res) showSearch(s.res);
+  $('sForm').onsubmit = function(e){
+    e.preventDefault();
+    s.q = $('sQ').value.trim(); s.scope = $('sScope').value; s.mode = $('sMode').value; s.words = $('sWords').checked;
+    $('sRes').innerHTML = empty('Searching...');
+    api('/api/search', { q: s.q, scope: s.scope, mode: s.mode, words: s.words ? '1' : undefined }).then(function(d){ s.res = d; showSearch(d); });
+  };
+}
+function showSearch(d){
+  var s = S.search, el = $('sRes'); if (!el) return;
+  if (d.error) { el.innerHTML = empty(esc(d.error)); return; }
+  var terms = [s.mode === 'regex' ? 're:' + s.q : s.q], re = termRe(terms), tj = esc(JSON.stringify(terms));
+  var files = {}; d.results.forEach(function(r){ files[r.fid] = 1; });
+  var h = '<div class="status" style="margin-bottom:8px">' + num(d.results.length) + ' results in ' + num(Object.keys(files).length) + ' files, ' + d.seconds + ' s' + (d.truncated ? ' &middot; <b>limit reached, refine the search</b>' : '') + '</div>';
+  if (!d.results.length) h += empty('Nothing found.');
+  else h += '<table><tr><th>File</th><th class="n">Line</th><th>Context</th><th></th></tr>' + d.results.map(function(r){
+    return '<tr><td><span class="fname">' + esc(base(r.path)) + '</span><div class="path">' + esc(r.path) + '</div></td><td class="n">' + (r.line || 'name') + '</td>' +
+      '<td class="snip">' + hl(r.snippet, re) + '</td><td class="w">' + (r.line ? '<button class="small" data-view="' + r.fid + '" data-line="' + r.line + '" data-terms="' + tj + '">View</button> ' : '') +
+      '<button class="small" data-copy="' + esc(r.real) + '">Copy path</button></td></tr>';
+  }).join('') + '</table>';
+  el.innerHTML = h;
+}
+
+/* ---------- lists & index ---------- */
+function hidden(){ return '<input type="hidden" name="csrf" value="' + CSRF + '"><input type="hidden" name="case" value="' + esc(S.case) + '">'; }
+function rLists(){
+  var m = $('main'); m.innerHTML = empty('Loading...');
+  Promise.all([api('/api/lists'), api('/api/reports'), api('/api/overview')]).then(function(r){
+    var lists = r[0], reps = r[1], ov = r[2], kl = S.editList;
+    var h = '<div class="grid2"><div>';
+    h += '<div class="panel"><h2>1. Index</h2><p class="status">Lists all files, unpacks archives (also nested), mailboxes and attachments, converts documents to text. ' +
+      (ov.indexed ? 'Indexed ' + esc(ov.meta.indexed) + '. Re-indexing replaces the index and the hunt results in the Hits tab (static reports stay).' : 'Not indexed yet.') + '</p>' +
+      '<form method="post" action="/index">' + hidden() + '<div class="formrow">Archive passwords (one per line, optional)<textarea name="passwords" rows="3" placeholder="infected&#10;password from the leak site"></textarea></div>' +
+      '<div class="formrow"><label class="inl"><input type="checkbox" name="hash" value="1" checked> SHA256 for every file (slower on large leaks)</label></div>' +
+      '<button class="primary">Start indexing</button></form></div>';
+    h += '<div class="panel"><h2>2. Keyword lists</h2><p class="status">One list per customer. Each hunt and report only contains the hits of its list.</p>';
+    if (lists.length) h += '<table><tr><th>List</th><th class="n">Keywords</th><th>Whole words</th><th></th></tr>' + lists.map(function(l){
+      return '<tr><td><b>' + esc(l.name) + '</b><div class="path">' + esc(l.keywords.slice(0, 6).join(', ')) + (l.keywords.length > 6 ? ', ...' : '') + '</div></td><td class="n">' + l.keywords.length + '</td><td>' + (l.whole_words ? 'yes' : 'no') + '</td>' +
+        '<td class="w"><form method="post" action="/hunt" style="display:inline">' + hidden() + '<input type="hidden" name="list" value="' + esc(l.name) + '"><button class="small primary"' + (ov.indexed ? '' : ' disabled') + '>Run hunt</button></form> ' +
+        '<button class="small" data-edit="' + esc(l.name) + '">Edit</button> ' +
+        '<form method="post" action="/dellist" style="display:inline" data-confirm="Delete list ' + esc(l.name) + '?">' + hidden() + '<input type="hidden" name="list" value="' + esc(l.name) + '"><button class="small">Delete</button></form></td></tr>';
+    }).join('') + '</table>';
+    else h += '<div class="status">No lists yet.</div>';
+    h += '</div>';
+    h += '<div class="panel"><h2>Static reports</h2>' + (reps.length ? '<table><tr><th>Report (HTML)</th><th>CSV</th></tr>' + reps.map(function(x){
+      return '<tr><td><a target="_blank" href="/file?' + qs({case: S.case, name: x.html}) + '">' + esc(x.html) + '</a></td><td><a href="/file?' + qs({case: S.case, name: x.csv}) + '">' + esc(x.csv) + '</a></td></tr>';
+    }).join('') + '</table>' : '<div class="status">No reports yet.</div>') + '<p class="status">Stored in /cases/leak-hunter/' + esc(S.case) + '/reports</p></div>';
+    h += '</div><div>';
+    h += '<div class="panel"><h2>' + (kl ? 'Edit list ' + esc(kl.name) : 'New list') + '</h2><form method="post" action="/savelist">' + hidden() +
+      '<div class="formrow">Name (e.g. customer)<br><input type="text" name="list" required style="width:100%" value="' + (kl ? esc(kl.name) : '') + '"' + (kl ? ' readonly' : '') + '></div>' +
+      '<div class="formrow">Keywords: new line, comma or semicolon separated. <code>re:</code> at the start of a line = regular expression (one per line). Case is ignored, <code>#</code> lines are comments.' +
+      '<textarea name="keywords" id="kwText" rows="14" placeholder="muster ag, muster-ag.ch&#10;@muster.ch&#10;re:MAG-\\d{6}">' + (kl ? esc(kl.keywords.join('\n')) : '') + '</textarea></div>' +
+      '<div class="formrow">Import .txt / .csv (appended): <input type="file" id="kwImport" accept=".txt,.csv,text/plain,text/csv"></div>' +
+      '<div class="formrow"><label class="inl"><input type="checkbox" name="whole_words" value="1"' + (kl && kl.whole_words ? ' checked' : '') + '> Whole words only (recommended for short keywords)</label></div>' +
+      '<button class="primary">Save list</button>' + (kl ? ' <button type="button" class="small" id="kwNew">New list instead</button>' : '') + '</form></div>';
+    h += '<div class="panel"><h2>Close case</h2><p class="status">Deletes index, unpacked files, lists and reports of this case in leak-hunter (not the source folder). Type the case name to confirm.</p>' +
+      '<form method="post" action="/purge">' + hidden() + '<input type="text" name="confirm" placeholder="' + esc(S.case) + '"> <button>Delete leak-hunter data</button></form></div>';
+    h += '</div></div>';
+    m.innerHTML = h;
+    $('kwImport').onchange = function(e){
+      var f = e.target.files[0]; if (!f) return;
+      var rd = new FileReader(); rd.onload = function(){ var t = $('kwText'); t.value = (t.value ? t.value.replace(/\s+$/, '') + '\n' : '') + rd.result; toast('Imported ' + f.name); };
+      rd.readAsText(f);
+    };
+    if ($('kwNew')) $('kwNew').onclick = function(){ S.editList = null; rLists(); };
+    m.querySelectorAll('[data-edit]').forEach(function(b){ b.onclick = function(){ S.editList = lists.filter(function(l){ return l.name === b.getAttribute('data-edit'); })[0]; rLists(); }; });
+    m.querySelectorAll('form[data-confirm]').forEach(function(f){ f.onsubmit = function(){ return confirm(f.getAttribute('data-confirm')); }; });
+  });
+}
+
+/* ---------- start ---------- */
+var params = new URLSearchParams(location.search);
+S.case = params.get('case') || ''; S.tab = params.get('tab') || 'overview';
+if (params.get('msg')) { $('msg').textContent = params.get('msg'); $('msg').style.display = 'block'; setTimeout(function(){ $('msg').style.display = 'none'; }, 6000); }
+renderTabs(); poll(); setInterval(poll, 2000);
+})();
+</script>
+</body>
+</html>

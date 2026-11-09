@@ -1,0 +1,21 @@
+[Unit]
+Description=leak-hunter (keyword hunting in leak data)
+ConditionPathIsMountPoint=/cases
+After=network.target
+
+[Service]
+User=analyst
+Environment=LH_DOCS=/cases/datashare/docs
+Environment=LH_WORK=/cases/leak-hunter
+Environment=LH_BIND=127.0.0.1
+Environment=LH_PORT=8090
+ExecStart=/usr/bin/python3 /opt/leak-hunter/app.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/cases
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
