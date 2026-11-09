@@ -19,13 +19,14 @@ Firewall, Rules, LAN:
 | 1 | Pass | IPv4 | TCP/UDP | LAN network | This Firewall | DNS (53) | default | DNS to OPNsense |
 | 2 | Block | IPv4 | any | any | This Firewall | any | | Block VMs to firewall |
 | 3 | Block | IPv4 | any | any | WAN network | any | | Block VMs to home LAN |
-| 4 | Pass | IPv4 | any | LAN network | any | any | **PROTON_GW** | Default allow LAN to any |
-| 5 | (disabled) | IPv6 | any | LAN network | any | any | | Default allow LAN IPv6 |
+| 4 | Pass | IPv4 | TCP | LEAK_VM | LEAK_VPS | SSH (22) | **WAN gateway** | Optional: leak VM pulls from download VPS via WAN ([16](16-leak-analysis.md)) |
+| 5 | Pass | IPv4 | any | LAN network | any | any | **PROTON_GW** | Default allow LAN to any |
+| 6 | (disabled) | IPv6 | any | LAN network | any | any | | Default allow LAN IPv6 |
 
 Notes:
 
 - DNS port goes in **Destination** port, not source port (mistake made once during setup).
-- New rules land at the bottom. Select them and use the move icon on rule 4 to place them above it.
+- New rules land at the bottom. Select them and use the move icon to place them above the default allow rule.
 - IPv6 allow rule disabled: the Proton config is IPv4 only, this prevents IPv6 leaks.
 
 ## WAN rules
@@ -34,11 +35,13 @@ Notes:
 |---|---|---|---|---|---|
 | Pass | TCP | WAN network | This Firewall | https | GUI from home LAN |
 
+Aliases for rule 4 (only if you use the download VPS): `LEAK_VM` = static IP of the leak VM, `LEAK_VPS` = the VPS's fixed IPv4. With Source NAT in Hybrid mode, the automatic WAN NAT rule covers it; everything else stays in the tunnel.
+
 ## Kill switch
 
 Firewall, Settings, Advanced: **Skip rules when gateway is down** = on.
 
-When `PROTON_GW` goes down, rule 4 is skipped entirely, so LAN traffic matches nothing and is dropped. It never falls back to the WAN default route.
+When `PROTON_GW` goes down, the default allow rule is skipped entirely, so LAN traffic matches nothing and is dropped. It never falls back to the WAN default route.
 
 Recovery after a tunnel outage: gateway needs up to a minute to be marked online again. If traffic still fails: Apply on LAN rules, or console option 11, or Firewall, Diagnostics, States, reset state table.
 

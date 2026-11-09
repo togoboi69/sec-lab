@@ -22,7 +22,6 @@ Optional things that build on the base lab.
 
 ## Leak analysis
 
-- **Download VPS for large leaks**: a disposable cloud server (billed hourly, deleted after the case, incl. its IPv4 and volume) downloads from the leak site via Tor, so your home IP never touches the leak site. The leak VM pulls the result with rsync over SSH (no inbound ports at home). One OPNsense rule lets only the leak VM reach the VPS on port 22 via WAN instead of the VPN, everything else stays in the tunnel.
 - **OCR in leak-hunter** (Tesseract) for scanned PDFs and images; until then Datashare's OCR covers this.
 
 ## Practice network

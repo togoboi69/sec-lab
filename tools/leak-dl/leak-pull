@@ -1,0 +1,29 @@
+#!/bin/bash
+# leak-pull <case>          pull /data/out/<case> from the download VPS into /cases/datashare/docs/<case>/
+# leak-pull --set-ip <IP>   set the VPS address (after every new server: forgets the old host key)
+set -u
+CONF=~/.config/leak-vps
+KH=~/.ssh/known_hosts_leakvps
+if [ "${1:-}" = "--set-ip" ] && [ -n "${2:-}" ]; then
+  mkdir -p ~/.config && echo "$2" > "$CONF"
+  ssh-keygen -R "$2" -f "$KH" >/dev/null 2>&1
+  echo "VPS set to $2"; exit 0
+fi
+if [ $# -ne 1 ]; then sed -n '2,3p' "$0"; exit 1; fi
+[ -f "$CONF" ] || { echo "run: leak-pull --set-ip <VPS IP>"; exit 1; }
+mountpoint -q /cases || { echo "/cases is locked, run cases-open first"; exit 1; }
+VPS=$(cat "$CONF"); CASE=$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')
+DEST=/cases/datashare/docs/$CASE
+mkdir -p "$DEST"
+for i in $(seq 1 30); do
+  rsync -a --partial --info=progress2 \
+    -e "ssh -i $HOME/.ssh/leak_vps -o UserKnownHostsFile=$KH -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30" \
+    "drop@$VPS:$CASE/" "$DEST/" && break
+  echo "transfer interrupted, retry $i in 15 s"; sleep 15
+done
+cd "$DEST" || exit 1
+if sha256sum -c --quiet SHA256SUMS; then
+  echo "All hashes OK ($(du -sh . | cut -f1)). Open leak-hunter and index the case '$CASE'."
+else
+  echo "HASH MISMATCH, run leak-pull $CASE again"; exit 1
+fi

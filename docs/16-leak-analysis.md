@@ -8,7 +8,7 @@ VM for analysing leaked data (e.g. ransomware leak-site dumps): an encrypted cas
 
 Simplest: the read-only CD route from [12](12-offline-detonation.md) (files > 4 GB need `genisoimage -udf -allow-limited-size`, see "Large files" below), in 700 `sudo mount -o ro /dev/sr0 /mnt/cd`.
 
-Idea for large dumps (see [IDEAS](../IDEAS.md)): a disposable cloud VPS downloads from the leak site via Tor (your home IP stays hidden), VM 700 pulls the result via rsync/SSH, with one OPNsense rule that lets only 700 → VPS:22 bypass the VPN (VPN providers often throttle large downloads).
+Large dumps: a cloud VPS downloads from the leak site (`.onion` via Tor, clearnet directly or via Tor), VM 700 pulls the result via rsync/SSH with a read-only key. One OPNsense rule lets only 700 → VPS:22 bypass the VPN (VPN providers often throttle large downloads). Your home IP never touches the leak site. Setup and scripts: [tools/leak-dl](../tools/leak-dl/README.md).
 
 ## VM
 
@@ -19,7 +19,7 @@ Idea for large dumps (see [IDEAS](../IDEAS.md)): a disposable cloud VPS download
 | CPU / RAM | 4 cores host, 12 GB, ballooning off |
 | Disk scsi0 | 60 GB `nvme` (system) |
 | Disk scsi1 | 300 GB `nvme`, **Backup unticked**, LUKS2 → `/cases` |
-| Network | vmbr1 |
+| Network | vmbr1, static IP (e.g. `10.10.10.70`, needed for the download VPS rule) |
 | Console | noVNC, clipboard works (Proxmox clipboard panel) |
 
 The RAM is mainly for Elasticsearch (Datashare). Without Datashare, 6 to 8 GB are enough.
@@ -37,8 +37,14 @@ sudo apt update && sudo apt -y full-upgrade
 sudo apt install -y qemu-guest-agent cryptsetup 7zip pst-utils ripgrep jq sqlite3 \
   poppler-utils mdbtools libimage-exiftool-perl file tree python3-venv python3-pip \
   docker.io docker-compose-v2
+sudo apt install -y curl wget rsync openssh-client net-tools dnsutils \
+  iputils-ping traceroute netcat-openbsd htop unzip git vim tmux ca-certificates
 sudo systemctl start qemu-guest-agent
 ```
+
+Ubuntu Desktop ships without curl, rsync, net-tools and similar; the second line adds the essentials.
+
+Static IP: set it in Settings → Network → Wired → IPv4 Manual and reconnect, otherwise the DHCP lease stays as a secondary address. Fix in the terminal: `nmcli con mod "<connection>" ipv4.method manual ipv4.addresses 10.10.10.70/24 ipv4.gateway 10.10.10.1 ipv4.dns 10.10.10.1 ipv4.ignore-auto-dns yes && nmcli con up "<connection>"`.
 
 ## Encrypted data disk `/cases`
 

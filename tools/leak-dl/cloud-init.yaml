@@ -1,0 +1,98 @@
+#cloud-config
+# Download VPS for leak data. Paste into Hetzner "Cloud config" when creating the server.
+# Replace PASTE_LEAK_VM_PUBLIC_KEY with the content of ~/.ssh/leak_vps.pub from the leak VM.
+package_update: true
+package_upgrade: true
+packages: [tor, torsocks, curl, wget, rsync, tmux, unattended-upgrades]
+ssh_pwauth: false
+users:
+  - default
+  - name: drop
+    shell: /bin/bash
+    lock_passwd: true
+write_files:
+  - path: /etc/ssh/sshd_config.d/90-leak-dl.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin prohibit-password
+      X11Forwarding no
+  - path: /home/drop/.ssh/authorized_keys
+    defer: true
+    owner: drop:drop
+    permissions: '0600'
+    content: |
+      command="/usr/bin/rrsync -ro /data/out",restrict PASTE_LEAK_VM_PUBLIC_KEY
+  - path: /usr/local/bin/leak-fetch
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # leak-fetch [--tor] <case> <url> [url...]   download (resume, retries)
+      # leak-fetch [--tor] <case> -l urls.txt      list of URLs (one per line), 3 in parallel
+      # leak-fetch [--tor] <case> -r <url>         mirror a directory listing recursively
+      # .onion always via Tor. Clearnet direct from the VPS (fast), or via Tor with --tor.
+      # Output: /data/out/<case>/ + SHA256SUMS, readable for the pull user "drop".
+      set -u
+      FORCE_TOR=0
+      if [ "${1:-}" = "--tor" ]; then FORCE_TOR=1; shift; fi
+      export FORCE_TOR
+      if [ $# -lt 2 ]; then sed -n '2,6p' "$0"; exit 1; fi
+      CASE=$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'); shift
+      if [ "$1" = "-l" ]; then LIST=$(realpath "${2:-}") || exit 1; [ -f "$LIST" ] || { echo "no such file: $2"; exit 1; }; fi
+      OUT=/data/out/$CASE
+      mkdir -p "$OUT" && cd "$OUT" || exit 1
+      systemctl is-active -q tor || systemctl start tor 2>/dev/null
+
+      use_tor() {  # .onion or --tor
+        [ "$FORCE_TOR" = 1 ] && return 0
+        local host="${1#*://}"; host="${host%%/*}"; host="${host%%:*}"
+        [[ "$host" == *.onion ]]
+      }
+      export -f use_tor
+
+      one() {
+        local url="$1" name code rc i proxy=()
+        name=$(basename "${url%%\?*}"); name=$(printf '%b' "${name//%/\\x}"); name=${name//\//_}
+        [ -n "$name" ] && [ "$name" != "." ] || name="download_$RANDOM"
+        for i in $(seq 1 100); do
+          # random SOCKS user = separate Tor circuit per download (IsolateSOCKSAuth)
+          if use_tor "$url"; then proxy=(--socks5-hostname 127.0.0.1:9050 --proxy-user "c$RANDOM:x"); else proxy=(); fi
+          code=$(curl -sS -f -L -C - --connect-timeout 120 --speed-limit 1 --speed-time 300 \
+            "${proxy[@]}" -w '%{http_code}' -o "$name" "$url"); rc=$?
+          if [ $rc -eq 0 ] && [ "${code:0:1}" = 2 ]; then echo "done: $name"; return 0; fi
+          if [ "$code" = 416 ]; then echo "done (already complete): $name"; return 0; fi
+          if [ $rc -eq 33 ]; then echo "server does not support resume, restarting $name"; rm -f "$name"; fi
+          case "$code" in 401|403|404|410) echo "FAILED (HTTP $code): $url"; [ -s "$name" ] || rm -f "$name"; return 1;; esac
+          echo "retry $i in 20 s (curl $rc, HTTP $code): $name"; sleep 20
+        done
+        echo "FAILED: $url"; return 1
+      }
+      export -f one
+
+      if [ "$1" = "-l" ]; then
+        grep -v '^[[:space:]]*#' "$LIST" | grep -v '^[[:space:]]*$' | xargs -P 3 -I{} bash -c 'one "$1"' _ {}
+      elif [ "$1" = "-r" ]; then
+        if use_tor "$2"; then W=(torsocks wget); echo "mirror via Tor"; else W=(wget); echo "mirror direct"; fi
+        for i in $(seq 1 30); do
+          "${W[@]}" -q --show-progress -r -np -nH -c -e robots=off --tries=20 --waitretry=20 \
+            --timeout=120 -R "index.html*" "$2" && break
+          echo "mirror interrupted, retry $i in 30 s"; sleep 30
+        done
+      else
+        for u in "$@"; do one "$u"; done
+      fi
+
+      echo "hashing..."
+      find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
+      chown -R drop:drop "$OUT"
+      du -sh "$OUT"
+      echo "Pull it from the leak VM with: leak-pull $CASE"
+runcmd:
+  - mkdir -p /data
+  - bash -c 'V=$(ls /dev/disk/by-id/scsi-0HC_Volume_* 2>/dev/null | head -1); if [ -n "$V" ]; then grep -q " /data " /etc/fstab || echo "$V /data ext4 discard,nofail,defaults 0 0" >> /etc/fstab; mount -a; fi'
+  - mkdir -p /data/out
+  - chown drop:drop /data/out
+  - chown -R drop:drop /home/drop/.ssh
+  - chmod 700 /home/drop/.ssh
+  - systemctl enable --now tor
+  - systemctl restart ssh

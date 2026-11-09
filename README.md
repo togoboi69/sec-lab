@@ -70,6 +70,7 @@ Plus two small tools:
 
 - **Sample Transfer UI** on the Proxmox host ([tools/transfer-ui](tools/transfer-ui/)): list files in 301, send one to 402 as ISO, start VMs, roll back 402.
 - **leak-hunter** in VM 700 ([tools/leak-hunter](tools/leak-hunter/)): overview of a data leak (file types, sizes, folder tree incl. archive contents), interactive hit reader, ad-hoc search, keyword lists per customer with separate HTML + CSV reports. Python standard library + ripgrep, 7-Zip, pdftotext, readpst, mdbtools.
+- **leak-dl** ([tools/leak-dl](tools/leak-dl/)): cloud-init for a disposable download VPS (`.onion` via Tor, clearnet direct), `leak-fetch` (resume, retries, parallel Tor circuits, mirror) and `leak-pull` (rsync into the leak VM, read-only key, hash check).
 
 ![leak-hunter](docs/img/leak-hunter/overview.png)
 
@@ -115,7 +116,7 @@ Rough time: Proxmox + OPNsense + VPN one evening, each analysis template one eve
 
 **Office/PDF/script sample:** static analysis in REMnux 301 (oletools, pdf tools, CyberChef) or FLARE 401. Do not execute.
 
-**Data leak (e.g. ransomware leak site):** copy the archive into VM 700's encrypted case volume, index it in leak-hunter, check the overview and problem list, run one keyword list per customer, work through the hits (filter, flag, view context), export one report per customer. Scanned documents: Datashare with OCR.
+**Data leak (e.g. ransomware leak site):** browse the leak site in a Kasm Tor Browser, download on the VPS with `leak-fetch`, `leak-pull` into VM 700's encrypted case volume (or copy smaller archives via the CD route), index it in leak-hunter, check the overview and problem list, run one keyword list per customer, work through the hits (filter, flag, view context), export one report per customer. Scanned documents: Datashare with OCR.
 
 **Executable / dynamic behaviour:** start 302, run `detonate-start.sh` (INetSim + PCAP), send the zip to 402 via the transfer UI, execute and watch with Procmon/Process Explorer, stop INetSim, read the INetSim report and the PCAP (Wireshark/NetworkMiner), roll back 402.
 
