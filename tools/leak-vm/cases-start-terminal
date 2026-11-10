@@ -1,0 +1,5 @@
+#!/bin/bash
+# Opens cases-start in the desktop's terminal (Ptyxis on Ubuntu 25.10+, else GNOME Terminal)
+if command -v ptyxis >/dev/null; then exec ptyxis --new-window -x /usr/local/bin/cases-start
+elif command -v gnome-terminal >/dev/null; then exec gnome-terminal -- /usr/local/bin/cases-start
+else exec x-terminal-emulator -e /usr/local/bin/cases-start; fi

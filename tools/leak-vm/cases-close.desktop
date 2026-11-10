@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Close cases
+Comment=Stop leak-hunter and Datashare, lock /cases
+Exec=/usr/local/bin/cases-close-terminal
+Icon=changes-prevent
+Terminal=false
+Categories=Utility;

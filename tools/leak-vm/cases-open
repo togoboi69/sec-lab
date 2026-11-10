@@ -1,0 +1,13 @@
+#!/bin/bash
+# Unlock /cases (LUKS), start Docker, Datashare and leak-hunter
+set -e
+DEV=/dev/disk/by-uuid/__UUID__
+MAP=$(lsblk -nro NAME,TYPE "$DEV" | awk '$2=="crypt"{print $1; exit}')
+if [ -z "$MAP" ]; then sudo cryptsetup open "$DEV" cases; MAP=cases; fi
+# already unlocked by the desktop (mounted under /media/...)? move it to /cases
+for m in $(findmnt -nro TARGET -S "/dev/mapper/$MAP" || true); do [ "$m" = /cases ] || sudo umount "$m"; done
+mountpoint -q /cases || sudo mount "/dev/mapper/$MAP" /cases
+sudo systemctl start docker
+if [ -f /cases/datashare/docker-compose.yml ]; then (cd /cases/datashare && sudo docker compose up -d); fi
+if systemctl list-unit-files leak-hunter.service >/dev/null 2>&1; then sudo systemctl start leak-hunter; fi
+echo "Cases open. Datashare: http://localhost:8080  leak-hunter: http://localhost:8090"

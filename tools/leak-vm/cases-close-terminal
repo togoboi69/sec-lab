@@ -1,0 +1,6 @@
+#!/bin/bash
+# Runs cases-close in a terminal window (app menu entry "Close cases")
+CMD='cases-close; echo; read -rp "Press Enter to close "'
+if command -v ptyxis >/dev/null; then exec ptyxis --new-window -x "bash -c '$CMD'"
+elif command -v gnome-terminal >/dev/null; then exec gnome-terminal -- bash -c "$CMD"
+else exec x-terminal-emulator -e bash -c "$CMD"; fi

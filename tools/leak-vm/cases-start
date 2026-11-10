@@ -1,0 +1,13 @@
+#!/bin/bash
+# Login starter: unlock /cases, start services, open leak-hunter in Firefox
+echo "Leak analysis VM: unlock the case volume"
+echo "(1. your sudo password, 2. the LUKS passphrase of /cases)"
+echo
+if cases-open; then
+  for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:8090/ && break; sleep 1; done
+  setsid -f firefox --new-tab http://localhost:8090 >/dev/null 2>&1
+  echo; echo "Done, leak-hunter opens in Firefox. This window closes in 5 s."; sleep 5
+else
+  echo; echo "Not unlocked. Start again from the app menu (Open cases) or run cases-open."
+  read -rp "Press Enter to close "
+fi

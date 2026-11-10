@@ -1,0 +1,8 @@
+#!/bin/bash
+# Stop leak-hunter, Datashare and Docker, lock /cases
+sudo systemctl stop leak-hunter 2>/dev/null
+if [ -f /cases/datashare/docker-compose.yml ]; then (cd /cases/datashare && sudo docker compose down); fi
+sudo systemctl stop docker docker.socket
+cd /
+MAP=$(findmnt -nro SOURCE /cases | sed 's|^/dev/mapper/||')
+sudo umount /cases && sudo cryptsetup close "${MAP:-cases}" && echo "Cases locked"

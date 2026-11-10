@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Open cases
+Comment=Unlock /cases and open leak-hunter
+Exec=/usr/local/bin/cases-start-terminal
+Icon=drive-harddisk-encrypted
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-Delay=5

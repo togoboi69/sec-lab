@@ -60,29 +60,9 @@ sudo systemctl disable --now docker docker.socket
 echo '{ "data-root": "/cases/docker" }' | sudo tee /etc/docker/daemon.json
 ```
 
-`/usr/local/bin/cases-open` (UUID from `sudo cryptsetup luksUUID /dev/sdb`):
+`cases-open` / `cases-close` and a login starter are in [tools/leak-vm](../tools/leak-vm/README.md) (`bash tools/leak-vm/install.sh` in the VM). `cases-open` also handles a disk that the desktop already unlocked under `/media/...`, and a udev rule hides the LUKS disk from the dock so it is not unlocked there.
 
-```bash
-#!/bin/bash
-set -e
-[ -e /dev/mapper/cases ] || sudo cryptsetup open /dev/disk/by-uuid/<UUID> cases
-mountpoint -q /cases || sudo mount /dev/mapper/cases /cases
-sudo systemctl start docker
-if [ -f /cases/datashare/docker-compose.yml ]; then cd /cases/datashare && sudo docker compose up -d; fi
-echo "Cases open. Datashare: http://localhost:8080"
-```
-
-`/usr/local/bin/cases-close`:
-
-```bash
-#!/bin/bash
-if [ -f /cases/datashare/docker-compose.yml ]; then cd /cases/datashare && sudo docker compose down; fi
-cd /
-sudo systemctl stop docker docker.socket
-sudo umount /cases && sudo cryptsetup close cases && echo "Cases locked"
-```
-
-Daily: boot → `cases-open` (passphrase) → work → `cases-close` → shut down.
+Daily: boot → login → terminal asks for sudo password + passphrase → Firefox opens leak-hunter → work → app menu **Close cases** → shut down. Manually: `cases-open` / `cases-close`.
 
 ## Datashare
 
